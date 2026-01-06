@@ -14,28 +14,30 @@ async def run():
     async with async_playwright() as p:
         print("🌍 Iniciando Browser Maximizado...")
         
-        # Use channel="chrome" se tiver o Chrome instalado, é mais estável para sites de vídeo
+        # channel="chrome" é recomendado se tiver Chrome instalado
         browser = await p.chromium.launch(
             headless=False, 
-            proxy=PROXY_CONFIG,
+            proxy=PROXY_CONFIG, # Se não usar proxy, remova ou comente esta linha
+            channel="chrome",   # Remove se der erro e use apenas o padrão
             args=["--start-maximized"]
         )
         
         context = await browser.new_context(no_viewport=True)
         page = await context.new_page()
 
-        # AQUI É O PONTO CHAVE:
-        # Quando o JS chamar window.pythonNotify, ele vai esperar essa função terminar
+        # Conecta o Python ao JS
         await page.expose_function("pythonNotify", lambda info: doc.handle_event(info, page))
 
         async def inject_interface():
-            # Se estiver tirando foto, não injeta nada para não poluir a tela
+            # Se estiver capturando (print), não injeta interface
             if doc.is_capturing: 
                 return 
 
             try:
-                js_code = doc.get_js()
-                await page.evaluate(js_code)
+                # Só tenta injetar se a página ainda estiver aberta
+                if not page.is_closed():
+                    js_code = doc.get_js()
+                    await page.evaluate(js_code)
             except Exception:
                 pass
 
@@ -45,25 +47,36 @@ async def run():
         print("🚀 Sistema Pronto! Navegue para começar.")
         
         try:
-            await page.goto("https://conecta.sedu.es.gov.br")
+            await page.goto("https://www.google.com")
             await asyncio.sleep(1)
             await inject_interface()
         except Exception as e:
-            print(f"⚠️ Erro ao carregar página inicial: {e}")
+            print(f"⚠️ Aviso: {e}")
 
+        # --- LOOP PRINCIPAL ---
         while not doc.finished:
+            # 1. VERIFICA SE O NAVEGADOR FOI FECHADO
             if not browser.is_connected():
-                print("❌ Navegador fechado pelo utilizador.")
-                break
+                print("\n❌ Navegador fechado pelo usuário.")
+                break # Sai do loop imediatamente
             
             await asyncio.sleep(1.0)
             
-            # Só atualiza a UI se estiver gravando E não estiver ocupado tirando foto
+            # 2. ATUALIZA A INTERFACE (Se necessário)
             if (doc.is_recording or doc.is_paused) and not doc.is_capturing:
                 await inject_interface()
+
+        # --- ENCERRAMENTO SEGURO ---
+        # Se o loop acabou mas o doc não foi finalizado (ex: navegador fechou no X)
+        # e existem logs gravados, salva agora para não perder o trabalho.
+        if not doc.finished and doc.logs:
+            print("💾 Salvando trabalho pendente antes de sair...")
+            await doc.save_manual()
+        
+        print("👋 Aplicação concluída com sucesso.")
 
 if __name__ == "__main__":
     try:
         asyncio.run(run())
     except KeyboardInterrupt:
-        print("\n👋 Programa encerrado.")
+        print("\n👋 Programa interrompido.")
