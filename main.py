@@ -45,7 +45,7 @@ async def run():
         print("🚀 Sistema Pronto! Navegue para começar.")
         
         try:
-            await page.goto("https://g1.globo.com")
+            await page.goto("https://conecta.sedu.es.gov.br")
             await asyncio.sleep(1)
             await inject_interface()
         except Exception as e:
