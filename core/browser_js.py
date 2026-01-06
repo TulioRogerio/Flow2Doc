@@ -10,7 +10,7 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
     display_name = project_name if (project_name and str(project_name) != "None") else "Novo Projeto"
     js_project_name = project_name if (project_name and str(project_name) != "None") else ""
 
-    # Controle de visibilidade dos botões vindo do Python
+    # Controle de visibilidade dos botões
     if is_recording or is_paused:
         style_start_btn = "none"
         style_name_input = "none"
@@ -24,6 +24,9 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
 
     return f"""
     (() => {{
+        // Variável para controlar o "Debounce" (evita duplicidade Change + Click)
+        let changeTimer = null;
+
         // --- 1. GESTÃO DO PAINEL (UI) ---
         const existingPanel = document.getElementById('doc-panel');
         
@@ -37,29 +40,24 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
             const controls = document.getElementById('recording-controls');
             const commentBox = document.getElementById('comment-box');
             
-            // Atualiza textos e cores (sempre seguro)
             if (dot) {{ dot.style.background = '{status_color}'; dot.style.boxShadow = '0 0 8px {status_color}'; }}
             if (status) status.innerText = '{status_text}';
             if (counter) counter.innerText = 'Passos: {step_count}';
             if (title && '{js_project_name}') title.innerText = '{js_project_name}';
             
-            // --- CORREÇÃO DO BUG DE REINÍCIO ---
-            // Verifica se o usuário está digitando o nome (Input visível mas Python diz PRONTO)
             const isLocalTyping = nameArea && nameArea.style.display !== 'none' && '{status_text}' === 'PRONTO';
 
-            // Só sobrescreve a visibilidade dos botões se o usuário NÃO estiver digitando
             if (!isLocalTyping) {{
                 if (btnStart) btnStart.style.display = '{style_start_btn}';
                 if (nameArea) nameArea.style.display = '{style_name_input}';
             }}
             
-            // Controles de gravação sempre obedecem ao Python
             if (controls) controls.style.display = '{style_controls}';
             if (commentBox) commentBox.style.display = '{style_comment}';
             return;
         }}
 
-        // --- CRIAÇÃO DO PAINEL (Executado apenas na primeira vez) ---
+        // --- CRIAÇÃO DO PAINEL ---
         const panel = document.createElement('div');
         panel.id = 'doc-panel';
         Object.assign(panel.style, {{
@@ -106,7 +104,7 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
         `;
         document.body.appendChild(panel);
 
-        // --- LISTENERS DE BOTÕES (UI) ---
+        // --- LISTENERS DE BOTÕES ---
         const btnStart = document.getElementById('btn-start');
         const nameInput = document.getElementById('project-name-input');
         const btnConfirmStart = document.getElementById('btn-confirm-start');
@@ -140,14 +138,20 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
             }}
         }};
 
-        // --- 2. LÓGICA DE CAPTURA COM TRAVA DE NAVEGAÇÃO ---
-        
+        // --- 2. LÓGICA DE CAPTURA (CLIQUES) ---
         window.addEventListener('click', async (e) => {{
             if (e.target.closest('#doc-panel')) return;
 
             const el = e.target;
             const isInput = ['INPUT', 'TEXTAREA'].includes(el.tagName) || el.isContentEditable;
-            if (isInput) return;
+            if (isInput) return; 
+
+            // SE HOUVER UM CLICK, CANCELA QUALQUER "CHANGE" PENDENTE
+            // Isso evita o print duplo (Preenchimento + Clique no Botão)
+            if (changeTimer) {{
+                clearTimeout(changeTimer);
+                changeTimer = null;
+            }}
 
             if (el.getAttribute('data-doc-bypass') === 'true') {{
                 el.removeAttribute('data-doc-bypass');
@@ -189,18 +193,36 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
             h.remove(); 
             el.setAttribute('data-doc-bypass', 'true');
             el.click(); 
-
         }}, true);
 
-        window.addEventListener('change', (e) => {{
+        // --- 3. LÓGICA DE CAPTURA (INPUTS/TEXTO) COM DELAY ---
+        window.addEventListener('change', async (e) => {{
             if (e.target.closest('#doc-panel')) return;
             const el = e.target;
+            
             if (['INPUT','TEXTAREA','SELECT'].includes(el.tagName)) {{
+                // Limpa timer anterior se houver
+                if (changeTimer) clearTimeout(changeTimer);
+
                 const border = el.style.border;
                 el.style.border = '3px solid #4caf50';
-                setTimeout(() => el.style.border = border, 800);
-                const val = el.type==='password'?'******':el.value;
-                window.pythonNotify({{event:'LOG', type:'Preenchimento', tag:el.tagName, text:el.name||'Campo', value:val}});
+                
+                // ATRASO DE 400ms PARA VERIFICAR SE O USUÁRIO VAI CLICAR EM ALGO
+                changeTimer = setTimeout(async () => {{
+                    const val = el.type==='password'?'******':el.value;
+                    
+                    // Se o timer sobreviveu até aqui, tira o print do preenchimento
+                    await window.pythonNotify({{
+                        event:'LOG', 
+                        type:'Preenchimento', 
+                        tag:el.tagName, 
+                        text:el.name||'Campo', 
+                        value:val
+                    }});
+
+                    setTimeout(() => el.style.border = border, 800);
+                    changeTimer = null;
+                }}, 400); // 400ms de tolerância
             }}
         }}, true);
     }})();
