@@ -62,14 +62,25 @@ class DocGenerator:
             print(f"💬 Comentário: {self.pending_comment}")
 
         elif event_type == 'UNDO':
-            if self.logs:
+            # --- CORREÇÃO DA LÓGICA DE DESFAZER ---
+            if self.logs and self.step_counter > 0:
+                # 1. Reconstrói o nome da imagem que será apagada
+                img_to_delete = f"{self.base_filename} ({self.step_counter:02d}).png"
+                
+                # 2. Apaga o arquivo físico
+                if self.file_manager:
+                    deleted = self.file_manager.delete_image(img_to_delete)
+                    msg_file = " (Imagem apagada)" if deleted else ""
+
+                # 3. Remove do log e recua o contador
                 self.logs.pop()
+                print(f"↩️ Passo {self.step_counter} desfeito.{msg_file}")
                 self.step_counter -= 1
-                print(f"↩️ Passo desfeito.")
+            else:
+                print("⚠️ Nada para desfazer (Lista vazia).")
 
         elif event_type in ['LOG', 'MANUAL_NOTE']:
             if self.is_recording and not self.is_paused:
-                # O JavaScript está esperando (await) esta função terminar!
                 await self.capture_action(info, page, is_manual=(event_type=='MANUAL_NOTE'))
 
     async def capture_action(self, info, page, is_manual=False):
@@ -85,12 +96,9 @@ class DocGenerator:
 
         try:
             # 1. ESCONDE O MENU
-            # Executa direto no DOM para ser instantâneo
             await page.evaluate("const p = document.getElementById('doc-panel'); if(p) p.style.display = 'none';")
             
-            # 2. PEQUENO DELAY (Opcional, mas recomendado)
-            # Apenas 0.2s para garantir que o menu sumiu e a bolinha (CSS) renderizou
-            # Como a navegação está travada, não corremos risco de mudar de página.
+            # 2. PEQUENO DELAY
             if not is_manual: 
                 await asyncio.sleep(0.2) 
             

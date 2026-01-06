@@ -124,8 +124,14 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
 
         document.getElementById('btn-pause').onclick = (e) => {{ e.stopPropagation(); window.pythonNotify({{event: 'PAUSE'}}); }};
         document.getElementById('btn-note').onclick = (e) => {{ e.stopPropagation(); const t = prompt('Nota:')||'Nota'; window.pythonNotify({{event:'MANUAL_NOTE', text:t}}); }};
-        document.getElementById('btn-undo').onclick = (e) => {{ e.stopPropagation(); if (confirm('Desfazer?')) window.pythonNotify({{event:'UNDO'}}); }};
         document.getElementById('btn-stop').onclick = (e) => {{ e.stopPropagation(); window.pythonNotify({{event:'STOP'}}); document.getElementById('doc-panel')?.remove(); }};
+
+        // --- ATUALIZAÇÃO AQUI: Botão Desfazer sem bloqueio ---
+        document.getElementById('btn-undo').onclick = (e) => {{ 
+            e.stopPropagation(); 
+            e.preventDefault(); 
+            window.pythonNotify({{event:'UNDO'}}); 
+        }};
 
         btnSaveComment.onclick = (e) => {{
             e.stopPropagation();
@@ -147,7 +153,6 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
             if (isInput) return; 
 
             // SE HOUVER UM CLICK, CANCELA QUALQUER "CHANGE" PENDENTE
-            // Isso evita o print duplo (Preenchimento + Clique no Botão)
             if (changeTimer) {{
                 clearTimeout(changeTimer);
                 changeTimer = null;
@@ -201,17 +206,14 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
             const el = e.target;
             
             if (['INPUT','TEXTAREA','SELECT'].includes(el.tagName)) {{
-                // Limpa timer anterior se houver
                 if (changeTimer) clearTimeout(changeTimer);
 
                 const border = el.style.border;
                 el.style.border = '3px solid #4caf50';
                 
-                // ATRASO DE 400ms PARA VERIFICAR SE O USUÁRIO VAI CLICAR EM ALGO
                 changeTimer = setTimeout(async () => {{
                     const val = el.type==='password'?'******':el.value;
                     
-                    // Se o timer sobreviveu até aqui, tira o print do preenchimento
                     await window.pythonNotify({{
                         event:'LOG', 
                         type:'Preenchimento', 
@@ -222,7 +224,7 @@ def get_injection_script(is_recording, is_paused, step_count, project_name):
 
                     setTimeout(() => el.style.border = border, 800);
                     changeTimer = null;
-                }}, 400); // 400ms de tolerância
+                }}, 400); 
             }}
         }}, true);
     }})();
