@@ -65,7 +65,7 @@ class DocGenerator:
             # --- CORREÇÃO DA LÓGICA DE DESFAZER ---
             if self.logs and self.step_counter > 0:
                 # 1. Reconstrói o nome da imagem que será apagada
-                img_to_delete = f"{self.base_filename} ({self.step_counter:02d}).png"
+                img_to_delete = f"{self.base_filename}({self.step_counter:02d}).png"
                 
                 # 2. Apaga o arquivo físico
                 if self.file_manager:
@@ -90,7 +90,7 @@ class DocGenerator:
         self.is_capturing = True 
         
         self.step_counter += 1
-        img_filename = f"{self.base_filename} ({self.step_counter:02d}).png"
+        img_filename = f"{self.base_filename}({self.step_counter:02d}).png"
         img_full_path = self.file_manager.get_image_path(img_filename)
         print(f"📸 Passo {self.step_counter}")
 
