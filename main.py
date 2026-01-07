@@ -75,7 +75,9 @@ async def run():
                     await asyncio.sleep(1.0)
                     
                     # Tenta injetar a interface (mantém o menu vivo)
-                    if (doc.is_recording or doc.is_paused) and not doc.is_capturing:
+                    # CORREÇÃO AQUI: Removemos "doc.is_recording or doc.is_paused"
+                    # Agora o menu é injetado sempre que não estiver capturando foto.
+                    if not doc.is_capturing:
                         await inject_interface()
                         
                 except Exception:
