@@ -17,11 +17,10 @@ async def run():
 
     try:
         async with async_playwright() as p:
-            # 1. Configuração do Navegador
+            # 1. Configuração do Navegador (sem proxy no launch)
             launch_args = {
                 "headless": False,
                 "args": ["--start-maximized"],
-                "proxy": PROXY_CONFIG if PROXY_CONFIG and PROXY_CONFIG.get("server") else None
             }
 
             # Tenta usar o Chrome instalado (melhor compatibilidade de vídeo/codecs)
@@ -31,8 +30,14 @@ async def run():
                 print("⚠️ Chrome não encontrado. Usando Chromium padrão.")
                 browser = await p.chromium.launch(**launch_args)
             
-            # Contexto com viewport zerado para pegar o tamanho total da janela
-            context = await browser.new_context(no_viewport=True)
+            # Contexto com viewport zerado e proxy configurado aqui (bypass funciona melhor no contexto)
+            context_args = {"no_viewport": True}
+            if PROXY_CONFIG and PROXY_CONFIG.get("server"):
+                context_args["proxy"] = {
+                    **PROXY_CONFIG,
+                    "bypass": "localhost,127.0.0.1,::1,<local>"
+                }
+            context = await browser.new_context(**context_args)
             page = await context.new_page()
 
             # 2. Ponte de Comunicação (Python <-> JS)
@@ -62,7 +67,7 @@ async def run():
             print("✅ Sistema Pronto! Navegue para começar.")
             try:
                 # Pode alterar para a URL que desejar iniciar
-                await page.goto("https://conecta.sedu.es.gov.br")
+                await page.goto("http://localhost:9000")
                 await asyncio.sleep(1)
                 await inject_interface()
             except Exception as e:
